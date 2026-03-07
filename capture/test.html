@@ -1,0 +1,47 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>GhostUX Capture - Test</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <style>body{font-family:system-ui,Arial;margin:20px}</style>
+</head>
+<body>
+  <h1>GhostUX Capture - Test page</h1>
+  <p>Haz clic en los botones o en cualquier parte de la página para generar eventos que se enviarán a <code>/ingest</code>.</p>
+
+  <button id="btn">Click me</button>
+
+  <script>
+    // Simple snippet adapted for testing: use absolute backend URL so page
+    // served from :8000 sends events to backend on :3000.
+    (function () {
+      const INGEST_URL = window.__GHOSTUX_INGEST_URL__ || 'http://localhost:3000/ingest'
+
+      function collectEvent(e) {
+        const payload = {
+          type: e.type,
+          tag: e.target && e.target.tagName,
+          x: e.clientX || null,
+          y: e.clientY || null,
+          ts: Date.now()
+        }
+
+        const body = JSON.stringify(payload)
+        if (navigator.sendBeacon) {
+          // sendBeacon accepts absolute URLs
+          navigator.sendBeacon(INGEST_URL, body)
+        } else {
+          fetch(INGEST_URL, { method: 'POST', body, keepalive: true, headers: { 'Content-Type': 'application/json' } }).catch(()=>{})
+        }
+      }
+
+      document.addEventListener('click', collectEvent, true)
+      window.addEventListener('error', collectEvent, true)
+    })()
+  </script>
+
+  <hr />
+  <p>Ver eventos recibidos: <a href="http://localhost:3000/events" target="_blank">/events (backend)</a> (dev)</p>
+</body>
+</html>

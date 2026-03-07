@@ -1,0 +1,47 @@
+openapi: 3.0.0
+info:
+  title: GhostUX Ingest API
+  version: 0.1.0
+paths:
+  /ingest:
+    post:
+      summary: Ingest a single event
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                type:
+                  type: string
+                tag:
+                  type: string
+                x:
+                  type: number
+                  nullable: true
+                y:
+                  type: number
+                  nullable: true
+                ts:
+                  type: integer
+      responses:
+        '204':
+          description: Event accepted
+  /events:
+    get:
+      summary: List recent events (for dev)
+      responses:
+        '200':
+          description: Recent events
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  count:
+                    type: integer
+                  events:
+                    type: array
+                    items:
+                      type: object

@@ -2,6 +2,41 @@ name: CI
 
 on:
   push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '16'
+
+      - name: Install backend deps
+        working-directory: backend
+        run: npm ci
+
+      - name: Start plain backend server
+        working-directory: backend
+        run: |
+          node run-server-plain.js &
+          # wait for server to start
+          for i in 1 2 3 4; do
+            nc -z localhost 3000 && break || sleep 1
+          done
+
+      - name: Run integration test
+        working-directory: backend
+        run: node test/integration.js
+name: CI
+
+on:
+  push:
     branches: [ main, 'ci/**', 'feature/**' ]
   pull_request:
     branches: [ main ]
