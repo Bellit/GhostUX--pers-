@@ -1,0 +1,10 @@
+{
+  "name": "ghostux-capture",
+  "version": "0.1.0",
+  "scripts": {
+    "build": "echo \"build placeholder\""
+  },
+  "devDependencies": {
+    "typescript": "^5.0.0"
+  }
+}
