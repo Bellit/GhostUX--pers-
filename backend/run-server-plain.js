@@ -49,7 +49,12 @@ function handleIngest(req, res) {
     }
     if (failIngest) {
       console.log('simulated ingest failure')
-      res.writeHead(500, { 'Content-Type': 'text/plain' })
+      res.writeHead(500, {
+        'Content-Type': 'text/plain',
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'POST, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type'
+      })
       return res.end('simulated failure')
     }
     function genId() { return Date.now().toString(36) + '-' + Math.random().toString(36).slice(2,9) }
