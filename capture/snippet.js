@@ -1,42 +1,36 @@
-// Snippet minimal: captura de clics y envío por fetch (ejemplo)
+// Compiled-from-TS lightweight snippet (bundled minimal changes)
 ;(function () {
-  // Batching capture snippet
-  const INGEST_URL = (window as any).__GHOSTUX_INGEST_URL__ || '/ingest'
+  const INGEST_URL = window.__GHOSTUX_INGEST_URL__ || '/ingest'
   const BATCH_SIZE = 25
   const FLUSH_INTERVAL = 2000
   const MAX_QUEUE = 1000
   const QUEUE_STORAGE_KEY = 'ghostux_queue_v1'
   const MAX_RETRIES = 4
-  const RETRY_BASE = 500 // ms
+  const RETRY_BASE = 500
   const RETRY_FACTOR = 2
   const RETRY_JITTER = 0.2
   const IDB_DB_NAME = 'ghostux-db'
   const IDB_STORE = 'kv'
 
-  function genId() {
-    return Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 9)
-  }
+  function genId() { return Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 9) }
 
-  // lightweight session/anon ids
-  function getOrCreate(key: string) {
+  function getOrCreate(key) {
     try {
       const v = localStorage.getItem(key)
       if (v) return v
       const id = genId()
       localStorage.setItem(key, id)
       return id
-    } catch (e) {
-      return genId()
-    }
+    } catch (e) { return genId() }
   }
 
   const sessionId = getOrCreate('ghostux_session')
   const anonId = getOrCreate('ghostux_anon')
 
-  let queue: any[] = []
-  let flushTimer: number | null = null
+  let queue = []
+  let flushTimer = null
 
-  function enqueue(ev: any) {
+  function enqueue(ev) {
     if (queue.length >= MAX_QUEUE) queue.shift()
     queue.push(ev)
     persistQueue()
@@ -45,7 +39,6 @@
     scheduleFlush()
   }
 
-  // IndexedDB helpers (small key/value store)
   function openIdb() {
     return new Promise((resolve, reject) => {
       if (!('indexedDB' in window)) return reject(new Error('no idb'))
@@ -91,7 +84,6 @@
 
   async function persistQueue() {
     try {
-      // try IDB first
       const ok = await idbSet(QUEUE_STORAGE_KEY, queue)
       console.log('[ghostux] persistQueue -> idb ok=', !!ok, 'len=', queue.length)
       if (ok) return
@@ -127,42 +119,23 @@
     flushTimer = window.setTimeout(() => { flushTimer = null; flush() }, FLUSH_INTERVAL)
   }
 
-  function clearQueue(n: number) {
-    queue.splice(0, n)
-    persistQueue()
-  }
+  function clearQueue(n) { queue.splice(0, n); persistQueue() }
 
-  function clearQueueByIds(ids: string[]) {
-    queue = queue.filter((it) => !ids.includes(it.eventId))
-    persistQueue()
-  }
+  function clearQueueByIds(ids) { queue = queue.filter((it) => !ids.includes(it.eventId)); persistQueue() }
 
-  async function sendBatchWithRetry(batch: any[], attempt = 0) {
+  async function sendBatchWithRetry(batch, attempt = 0) {
     const ids = batch.map((b) => b.eventId)
     const body = JSON.stringify(batch)
     try {
       try { console.log('[ghostux] sendBatch attempt=', attempt, 'batchLen=', batch.length, 'ids=', ids.slice(0,5)) } catch (e) {}
       if (navigator.sendBeacon && attempt === 0) {
-        try {
-          navigator.sendBeacon(INGEST_URL, body)
-          clearQueueByIds(ids)
-          return
-        } catch (e) {
-          // fallthrough to fetch
-        }
+        try { navigator.sendBeacon(INGEST_URL, body); clearQueueByIds(ids); return } catch (e) {}
       }
       const res = await fetch(INGEST_URL, { method: 'POST', body, headers: { 'Content-Type': 'application/json' }, keepalive: true })
       try { console.log('[ghostux] sendBatch response status=', res && res.status) } catch (e) {}
-      if (res && (res.status === 200 || res.status === 204)) {
-        clearQueueByIds(ids)
-        return
-      }
-      // for 4xx (except 429) do not retry
+      if (res && (res.status === 200 || res.status === 204)) { clearQueueByIds(ids); return }
       if (res && res.status >= 400 && res.status < 500 && res.status !== 429) return
-    } catch (err) {
-      // network error: will retry below if attempts remain
-    }
-
+    } catch (err) { console.log('[ghostux] sendBatch error', err) }
     if (attempt < MAX_RETRIES) {
       const base = RETRY_BASE * Math.pow(RETRY_FACTOR, attempt)
       const jitter = Math.round(base * RETRY_JITTER * (Math.random() * 2 - 1))
@@ -171,14 +144,9 @@
     }
   }
 
-  async function flush() {
-    if (!queue.length) return
-    const batch = queue.slice(0, BATCH_SIZE)
-    // optimistic: schedule retry/send but don't remove until success
-    sendBatchWithRetry(batch, 0)
-  }
+  async function flush() { if (!queue.length) return; const batch = queue.slice(0, BATCH_SIZE); sendBatchWithRetry(batch, 0) }
 
-  function collectEvent(e: any) {
+  function collectEvent(e) {
     const payload = {
       eventId: genId(),
       type: e.type,
@@ -200,10 +168,8 @@
 
   document.addEventListener('click', collectEvent, true)
   window.addEventListener('error', collectEvent, true)
-  // cargar cola persistida en background
   loadQueue()
   window.addEventListener('beforeunload', () => {
-    // try to flush synchronously
     if (queue.length) {
       try {
         if (navigator.sendBeacon) {
@@ -215,6 +181,5 @@
     }
   })
 
-  // expose for debugging
-  (window as any)._ghostux = { enqueue, flush }
+  window._ghostux = { enqueue, flush }
 })()
