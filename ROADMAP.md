@@ -20,7 +20,7 @@ Objetivo: tener un flujo reproducible captura -> ingest -> persistencia mínima 
 - [ ] 1) Definir el contrato final del MVP (eventos mínimos, campos obligatorios, retención, GDPR) — responsable: equipo
  - [x] 2) Implementar batching + retry en el snippet de captura (`capture/src/snippet.ts`) — reducir requests y mejorar fiabilidad
  - [ ] 3) Añadir persistencia mínima de eventos en backend (archivo append-only o SQLite) para pruebas y reinicios
-- [ ] 4) Añadir endpoint y UI mínima `/dashboard` que muestre lista/agregados de eventos
+ - [x] 4) Añadir endpoint y UI mínima `/dashboard` que muestre lista/agregados de eventos
  - [ ] 5) Añadir tests E2E que cubran flujo completo (snippet -> ingest -> persistencia -> dashboard) — en progreso (script headless disponible en `tools/run_snippet_test.js`)
 
 ## Mediano plazo
