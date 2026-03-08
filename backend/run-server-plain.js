@@ -1,9 +1,30 @@
 // Plain Node.js HTTP server for local testing without external deps
 const http = require('http')
 const url = require('url')
+const fs = require('fs')
+const path = require('path')
 
 var events = []
+var seenIds = new Set()
 var failIngest = false
+const DATA_DIR = path.join(__dirname, 'data')
+const EVENTS_LOG = path.join(DATA_DIR, 'events.log')
+
+try { fs.mkdirSync(DATA_DIR, { recursive: true }) } catch (e) {}
+// load persisted events (JSONL)
+try {
+  if (fs.existsSync(EVENTS_LOG)) {
+    const content = fs.readFileSync(EVENTS_LOG, 'utf8')
+    content.split('\n').forEach((line) => {
+      if (!line) return
+      try {
+        const ev = JSON.parse(line)
+        events.push(ev)
+        if (ev && ev.eventId) seenIds.add(ev.eventId)
+      } catch (e) { /* ignore */ }
+    })
+  }
+} catch (e) { console.error('Error loading persisted events', e) }
 
 function sendJSON(res, status, obj) {
   var payload = JSON.stringify(obj)
@@ -32,17 +53,36 @@ function handleIngest(req, res) {
       return res.end('simulated failure')
     }
     function genId() { return Date.now().toString(36) + '-' + Math.random().toString(36).slice(2,9) }
+    function isValidEvent(e) {
+      return e && typeof e.type === 'string' && (typeof e.ts === 'number' || typeof e.ts === 'bigint') && typeof e.pageUrl === 'string'
+    }
+    function appendToLog(ev) {
+      try { fs.appendFileSync(EVENTS_LOG, JSON.stringify(ev) + '\n') } catch (e) { console.error('Failed to append event', e) }
+    }
     if (Array.isArray(payload)) {
       for (var i = 0; i < payload.length; i++) {
         var p = payload[i]
-        var ev = Object.assign({ receivedAt: Date.now(), eventId: p && p.eventId ? p.eventId : genId() }, p)
+        if (!isValidEvent(p)) continue
+        var id = p && p.eventId ? p.eventId : genId()
+        if (seenIds.has(id)) continue
+        var ev = Object.assign({ receivedAt: Date.now(), eventId: id }, p)
         events.push(ev)
+        seenIds.add(ev.eventId)
+        appendToLog(ev)
         console.log('ingested event', ev)
       }
     } else {
-      var event = Object.assign({ receivedAt: Date.now(), eventId: payload && payload.eventId ? payload.eventId : genId() }, payload)
-      events.push(event)
-      console.log('ingested event', event)
+      if (!isValidEvent(payload)) {
+        return sendJSON(res, 400, { error: 'invalid event payload, required: type, ts, pageUrl' })
+      }
+      var id = payload && payload.eventId ? payload.eventId : genId()
+      if (!seenIds.has(id)) {
+        var event = Object.assign({ receivedAt: Date.now(), eventId: id }, payload)
+        events.push(event)
+        seenIds.add(event.eventId)
+        appendToLog(event)
+        console.log('ingested event', event)
+      }
     }
     res.writeHead(204, {
       'Access-Control-Allow-Origin': '*',
