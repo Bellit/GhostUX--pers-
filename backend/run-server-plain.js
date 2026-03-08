@@ -225,21 +225,44 @@ function handleEvents(req, res) {
 }
 
 function handleDashboard(req, res) {
-  const recent = events.slice(-100)
-  let html = '<!doctype html><html><head><meta charset="utf-8"><title>GhostUX Dashboard</title></head><body>'
-  html += '<h1>Recent events</h1>'
-  html += '<table border="1" cellpadding="4" cellspacing="0"><tr><th>receivedAt</th><th>eventId</th><th>type</th><th>pageUrl</th></tr>'
-  recent.forEach((ev) => {
-    html += '<tr>' +
-      '<td>' + new Date(ev.receivedAt).toISOString() + '</td>' +
-      '<td>' + (ev.eventId || '') + '</td>' +
-      '<td>' + (ev.type || '') + '</td>' +
-      '<td>' + (ev.pageUrl ? ev.pageUrl.replace(/</g, '&lt;') : '') + '</td>' +
-      '</tr>'
-  })
-  html += '</table></body></html>'
-  res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' })
-  res.end(html)
+  const html = `<!doctype html>
+  <html>
+    <head>
+      <meta charset="utf-8">
+      <title>GhostUX Dashboard</title>
+      <style>body{font-family:Arial,Helvetica,sans-serif;margin:20px}table{border-collapse:collapse}td,th{border:1px solid #ccc;padding:6px}</style>
+    </head>
+    <body>
+      <h1>GhostUX Dashboard</h1>
+      <div style="margin-bottom:12px">
+        <label>Admin token: <input id="token" style="width:320px" placeholder="x-admin-token"></label>
+        <button id="saveToken">Guardar</button> <button id="clearToken">Borrar</button>
+      </div>
+      <div style="margin-bottom:12px">
+        <button id="refresh">Refrescar eventos</button>
+        <button id="export">Exportar JSON</button>
+        Cleanup (días): <input id="days" value="30" style="width:60px"> <button id="cleanup">Run</button>
+      </div>
+      <div id="status" style="margin-bottom:12px;color:#333"></div>
+      <div id="tableWrap"></div>
+      <script>
+        (function(){
+          var tokenInput=document.getElementById("token");
+          var saved=localStorage.getItem("ghostux_admin_token"); if(saved) tokenInput.value=saved;
+          document.getElementById("saveToken").onclick=function(){ localStorage.setItem("ghostux_admin_token", tokenInput.value); alert("Token guardado en localStorage"); };
+          document.getElementById("clearToken").onclick=function(){ localStorage.removeItem("ghostux_admin_token"); tokenInput.value=""; alert("Token borrado"); };
+          function setStatus(s){ document.getElementById("status").textContent = s; }
+          function renderTable(rows){ var wrap=document.getElementById("tableWrap"); if(!rows || !rows.length){ wrap.innerHTML = "<p>No hay eventos</p>"; return; } var out = '<table><tr><th>receivedAt</th><th>eventId</th><th>type</th><th>pageUrl</th></tr>'; for(var i=rows.length-1;i>=0;i--){ var ev=rows[i]; out += '<tr><td>' + (new Date(ev.receivedAt)).toISOString() + '</td><td>' + (ev.eventId||'') + '</td><td>' + (ev.type||'') + '</td><td>' + ((ev.pageUrl||'').replace(/</g,'&lt;')) + '</td></tr>'; } out += '</table>'; wrap.innerHTML = out; }
+          function loadEvents(){ setStatus('Cargando...'); fetch('/events').then(function(r){ return r.json(); }).then(function(j){ renderTable(j.events||[]); setStatus('Eventos: ' + (j.count||0)); }).catch(function(e){ setStatus('Error cargando eventos'); }); }
+          document.getElementById('refresh').onclick = loadEvents; loadEvents();
+          document.getElementById('export').onclick = function(){ var token = localStorage.getItem('ghostux_admin_token') || document.getElementById('token').value; var headers = {}; if(token) headers['x-admin-token'] = token; fetch('/admin/export?limit=10000', { headers: headers }).then(function(r){ if(r.status === 401){ alert('Unauthorized: token inválido'); return; } return r.text(); }).then(function(txt){ if(!txt) return; var blob = new Blob([txt], { type: 'application/json' }); var url = URL.createObjectURL(blob); var a = document.createElement('a'); a.href = url; a.download = 'events.json'; a.click(); URL.revokeObjectURL(url); }).catch(function(e){ alert('Error export: ' + e.message); }); };
+          document.getElementById('cleanup').onclick = function(){ var days = document.getElementById('days').value; if(!confirm('Confirm cleanup older than ' + days + ' days?')) return; var token = localStorage.getItem('ghostux_admin_token') || document.getElementById('token').value; var headers = {'Content-Type':'application/json'}; if(token) headers['x-admin-token'] = token; fetch('/admin/cleanup', { method: 'POST', headers: headers, body: JSON.stringify({ days: Number(days) }) }).then(function(r){ return r.json().then(function(j){ if(r.status === 401){ alert('Unauthorized: token inválido'); return; } setStatus('Cleanup result: ' + JSON.stringify(j)); loadEvents(); }); }).catch(function(e){ alert('Error cleanup: ' + e.message); }); };
+        })();
+      </script>
+    </body>
+  </html>`;
+  res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+  res.end(html);
 }
 
 function handleAdminExport(req, res) {
