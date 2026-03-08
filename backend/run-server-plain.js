@@ -119,6 +119,24 @@ function handleEvents(req, res) {
   sendJSON(res, 200, { count: events.length, events: events.slice(-50) })
 }
 
+function handleDashboard(req, res) {
+  const recent = events.slice(-100)
+  let html = '<!doctype html><html><head><meta charset="utf-8"><title>GhostUX Dashboard</title></head><body>'
+  html += '<h1>Recent events</h1>'
+  html += '<table border="1" cellpadding="4" cellspacing="0"><tr><th>receivedAt</th><th>eventId</th><th>type</th><th>pageUrl</th></tr>'
+  recent.forEach((ev) => {
+    html += '<tr>' +
+      '<td>' + new Date(ev.receivedAt).toISOString() + '</td>' +
+      '<td>' + (ev.eventId || '') + '</td>' +
+      '<td>' + (ev.type || '') + '</td>' +
+      '<td>' + (ev.pageUrl ? ev.pageUrl.replace(/</g, '&lt;') : '') + '</td>' +
+      '</tr>'
+  })
+  html += '</table></body></html>'
+  res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' })
+  res.end(html)
+}
+
 var server = http.createServer(function (req, res) {
   var p = url.parse(req.url, true)
   if (req.method === 'OPTIONS') {
@@ -133,6 +151,7 @@ var server = http.createServer(function (req, res) {
   if (p.pathname === '/ingest' && req.method === 'POST') return handleIngest(req, res)
   if (p.pathname === '/toggle-fail' && req.method === 'POST') return handleToggleFail(req, res)
   if (p.pathname === '/events' && req.method === 'GET') return handleEvents(req, res)
+  if (p.pathname === '/dashboard' && req.method === 'GET') return handleDashboard(req, res)
   if (p.pathname === '/' && req.method === 'GET') return sendJSON(res, 200, { status: 'ok', service: 'ghostux-backend-plain' })
 
   res.writeHead(404, { 'Content-Type': 'text/plain' })
