@@ -1,7 +1,7 @@
 // Snippet minimal: captura de clics y envío por fetch (ejemplo)
 ;(function () {
   // Batching capture snippet
-  const INGEST_URL = (window as any).__GHOSTUX_INGEST_URL__ || '/ingest'
+  const INGEST_URL = (window as any).__GHOSTUX_INGEST_URL__ || 'http://127.0.0.1:3000/ingest'
   const BATCH_SIZE = 25
   const FLUSH_INTERVAL = 2000
   const MAX_QUEUE = 1000

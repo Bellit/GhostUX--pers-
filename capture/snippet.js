@@ -1,6 +1,6 @@
 // Compiled-from-TS lightweight snippet (bundled minimal changes)
 ;(function () {
-  const INGEST_URL = window.__GHOSTUX_INGEST_URL__ || '/ingest'
+  const INGEST_URL = window.__GHOSTUX_INGEST_URL__ || 'http://127.0.0.1:3000/ingest'
   const BATCH_SIZE = 25
   const FLUSH_INTERVAL = 2000
   const MAX_QUEUE = 1000

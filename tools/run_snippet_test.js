@@ -8,6 +8,13 @@ const fetch = global.fetch || require('node-fetch');
   const browser = await puppeteer.launch({ headless: true, args: ['--no-sandbox', '--disable-setuid-sandbox'] })
   const page = await browser.newPage()
   page.setDefaultNavigationTimeout(20000)
+  page.on('console', msg => {
+    try { console.log('PAGE LOG:', msg.text()) } catch (e) {}
+  })
+  // disable sendBeacon so we force fetch + IndexedDB path in tests
+  await page.evaluateOnNewDocument(() => {
+    try { Object.defineProperty(navigator, 'sendBeacon', { value: undefined, configurable: true }) } catch (e) {}
+  })
 
   function sleep(ms) { return new Promise(r => setTimeout(r, ms)) }
 
@@ -30,8 +37,8 @@ const fetch = global.fetch || require('node-fetch');
     await sleep(150)
   }
 
-  // wait for snippet to persist
-  await sleep(1500)
+  // wait a bit for snippet to persist to IndexedDB
+  await sleep(2000)
 
   // read IndexedDB value
   const stored = await page.evaluate(() => {
