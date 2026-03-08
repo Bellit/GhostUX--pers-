@@ -57,3 +57,4 @@ Objetivos:
 - `capture/src/snippet.ts` actualizado: ahora añade `sessionId`/`anonId`, batching, retry y persistencia cliente en IndexedDB.
 - Añadir validación y normalización en backend (`backend/src/index.ts`) y persistencia mínima en servidor (pendiente).
 - Tests: se añadió `tools/run_snippet_test.js` como prueba headless que valida encolado y reenvío; integrar en CI si se desea.
+ - Nota: el backend plano incluye ahora endpoints de administración `/admin/export` (exportar eventos) y `/admin/cleanup` (eliminar eventos más antiguos que N días). Actualmente la persistencia es `backend/data/events.log` (JSONL). Considerar migrar a SQLite para consultas y retención controlada.

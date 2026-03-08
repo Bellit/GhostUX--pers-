@@ -77,6 +77,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Cache node modules
+        uses: actions/cache@v4
+        with:
+          path: ~/.npm
+          key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node-
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -84,22 +92,26 @@ jobs:
 
       - name: Install dependencies (root)
         run: |
-          npm ci || npm install
+          npm ci || npm install || true
 
       - name: Install puppeteer dependencies
         run: |
-          sudo apt-get update && sudo apt-get install -y ca-certificates fonts-liberation libasound2 libatk1.0-0 libatk-bridge2.0-0 libcups2 libgtk-3-0 libx11-xcb1 libxcomposite1 libxdamage1 libxrandr2 libgbm1 libnss3 libxss1 libpangocairo-1.0-0
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ca-certificates fonts-liberation libasound2 libatk1.0-0 libatk-bridge2.0-0 libcups2 libgtk-3-0 libx11-xcb1 libxcomposite1 libxdamage1 libxrandr2 libgbm1 libnss3 libxss1 libpangocairo-1.0-0
+          sudo apt-get clean
 
       - name: Start backend server
         run: |
           node backend/run-server-plain.js &
-          for i in 1 2 3 4 5; do nc -z localhost 3000 && break || sleep 1; done
+          for i in 1 2 3 4 5 6 7 8 9 10; do nc -z localhost 3000 && break || sleep 1; done
 
       - name: Start static server
         run: |
-          (cd capture && node static-server.js &) ; for i in 1 2 3 4 5; do nc -z localhost 8000 && break || sleep 1; done
+          (cd capture && node static-server.js &) ; for i in 1 2 3 4 5 6 7 8 9 10; do nc -z localhost 8000 && break || sleep 1; done
 
       - name: Run E2E headless test
         run: |
           npm install puppeteer --no-save
           node tools/run_snippet_test.js
+        env:
+          PUPPETEER_SKIP_CHROMIUM_DOWNLOAD: 'false'

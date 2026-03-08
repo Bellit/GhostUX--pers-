@@ -22,6 +22,9 @@ Objetivo: tener un flujo reproducible captura -> ingest -> persistencia mínima 
  - [ ] 3) Añadir persistencia mínima de eventos en backend (archivo append-only o SQLite) para pruebas y reinicios
  - [x] 4) Añadir endpoint y UI mínima `/dashboard` que muestre lista/agregados de eventos
  - [ ] 5) Añadir tests E2E que cubran flujo completo (snippet -> ingest -> persistencia -> dashboard) — en progreso (script headless disponible en `tools/run_snippet_test.js`)
+ - [x] 3) Añadir persistencia mínima de eventos en backend (archivo append-only JSONL) para pruebas y reinicios
+ - [x] 4) Añadir endpoint y UI mínima `/dashboard` que muestre lista/agregados de eventos
+ - [x] 5) Añadir tests E2E que cubran flujo completo (snippet -> ingest -> persistencia -> dashboard) — script headless disponible y CI E2E job añadido
 
 ## Mediano plazo
 - [ ] Migrar backend TypeScript para funcionar con Node>=16 y preparar build/deploy
@@ -43,5 +46,8 @@ Objetivo: tener un flujo reproducible captura -> ingest -> persistencia mínima 
 - Se implementó `batching + retry` en el snippet de captura y persistencia cliente en IndexedDB (`capture/src/snippet.ts` + `capture/snippet.js`).
 - Se añadió un script de prueba headless `tools/run_snippet_test.js` que valida encolado en IndexedDB y reenvío tras recuperación del backend.
 - Los endpoints actuales son experimentales y sólo deben usarse en entorno de desarrollo hasta añadir autenticación y validación.
+ - Los endpoints actuales son experimentales y sólo deben usarse en entorno de desarrollo hasta añadir autenticación y validación.
+ - Se añadieron endpoints de administración: `/admin/export` (exportar eventos) y `/admin/cleanup` (eliminar eventos con más de N días). Estas operaciones afectan al archivo JSONL en `backend/data/events.log`.
+ - Persistencia actual: append-only `backend/data/events.log` con carga en memoria al arranque; siguiente paso recomendable: migrar a SQLite o base de datos relacional para consultas y retención.
 
 Branch con cambios: `feature/batching-retry-idb` (subida a origin). PR sugerida: https://github.com/Bellit/GhostUX--pers-/pull/new/feature/batching-retry-idb

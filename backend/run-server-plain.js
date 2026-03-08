@@ -9,6 +9,11 @@ var seenIds = new Set()
 var failIngest = false
 const DATA_DIR = path.join(__dirname, 'data')
 const EVENTS_LOG = path.join(DATA_DIR, 'events.log')
+const ADMIN_TOKEN = process.env.ADMIN_TOKEN || 'dev-admin-token'
+const USE_SQLITE = process.env.USE_SQLITE === '1'
+const SQLITE_DB = path.join(DATA_DIR, 'events.sqlite')
+var sqliteEnabled = false
+var sqliteDb = null
 
 try { fs.mkdirSync(DATA_DIR, { recursive: true }) } catch (e) {}
 // load persisted events (JSONL)
@@ -25,6 +30,93 @@ try {
     })
   }
 } catch (e) { console.error('Error loading persisted events', e) }
+
+// Try to initialize sqlite if requested
+if (USE_SQLITE) {
+  try {
+    const sqlite3 = require('sqlite3').verbose()
+    sqliteDb = new sqlite3.Database(SQLITE_DB)
+    sqliteDb.serialize(() => {
+      sqliteDb.run('CREATE TABLE IF NOT EXISTS events (receivedAt INTEGER, eventId TEXT PRIMARY KEY, payload TEXT)')
+      // load events from sqlite into memory
+      sqliteDb.all('SELECT receivedAt,eventId,payload FROM events ORDER BY receivedAt ASC', (err, rows) => {
+        if (!err && rows && rows.length) {
+          rows.forEach((r) => {
+            try {
+              const ev = JSON.parse(r.payload)
+              events.push(ev)
+              if (ev && ev.eventId) seenIds.add(ev.eventId)
+            } catch (e) { /* ignore */ }
+          })
+        }
+      })
+    })
+    sqliteEnabled = true
+    console.log('SQLite persistence enabled:', SQLITE_DB)
+  } catch (e) {
+    console.warn('SQLite requested but not available, falling back to JSONL:', e && e.message)
+    sqliteEnabled = false
+  }
+}
+
+// Helper: save full events array back to JSONL (atomic write)
+function saveEventsToLog(arr) {
+  try {
+    if (sqliteEnabled && sqliteDb) {
+      // replace table contents atomically via transaction
+      sqliteDb.serialize(() => {
+        sqliteDb.run('BEGIN TRANSACTION')
+        sqliteDb.run('DELETE FROM events')
+        const stmt = sqliteDb.prepare('INSERT OR IGNORE INTO events (receivedAt,eventId,payload) VALUES (?,?,?)')
+        for (const e of arr) {
+          stmt.run(e.receivedAt || Date.now(), e.eventId || '', JSON.stringify(e))
+        }
+        stmt.finalize()
+        sqliteDb.run('COMMIT')
+      })
+      return true
+    }
+    const tmp = EVENTS_LOG + '.tmp'
+    const out = arr.map((e) => JSON.stringify(e)).join('\n') + (arr.length ? '\n' : '')
+    fs.writeFileSync(tmp, out, 'utf8')
+    fs.renameSync(tmp, EVENTS_LOG)
+    return true
+  } catch (err) {
+    console.error('Failed to save events log', err)
+    return false
+  }
+}
+
+// Helper: cleanup events older than `days` and persist
+function cleanupOldEvents(days) {
+  const cutoff = Date.now() - (Number(days) || 0) * 24 * 60 * 60 * 1000
+  const before = events.length
+  if (sqliteEnabled && sqliteDb) {
+    try {
+      sqliteDb.run('DELETE FROM events WHERE receivedAt < ?', cutoff)
+      // reload memory from sqlite
+      events = []
+      seenIds = new Set()
+      sqliteDb.all('SELECT payload FROM events ORDER BY receivedAt ASC', (err, rows) => {
+        if (!err && rows) rows.forEach(r => {
+          try { const ev = JSON.parse(r.payload); events.push(ev); if (ev && ev.eventId) seenIds.add(ev.eventId) } catch (e) {}
+        })
+      })
+      return { ok: true, before: before, after: events.length }
+    } catch (e) { return { ok: false, before: before, after: before } }
+  }
+  events = events.filter((e) => !e.receivedAt || e.receivedAt >= cutoff)
+  // rebuild seenIds set
+  seenIds = new Set(events.map((e) => e.eventId).filter(Boolean))
+  const ok = saveEventsToLog(events)
+  return { ok: ok, before: before, after: events.length }
+}
+
+function isAdminAuthorized(req, query) {
+  // check header or query param
+  const token = (req.headers['x-admin-token'] || '').toString() || (query && query.token)
+  return token === ADMIN_TOKEN
+}
 
 function sendJSON(res, status, obj) {
   var payload = JSON.stringify(obj)
@@ -62,7 +154,20 @@ function handleIngest(req, res) {
       return e && typeof e.type === 'string' && (typeof e.ts === 'number' || typeof e.ts === 'bigint') && typeof e.pageUrl === 'string'
     }
     function appendToLog(ev) {
-      try { fs.appendFileSync(EVENTS_LOG, JSON.stringify(ev) + '\n') } catch (e) { console.error('Failed to append event', e) }
+      try {
+        if (sqliteEnabled && sqliteDb) {
+          try {
+            const stmt = sqliteDb.prepare('INSERT OR IGNORE INTO events (receivedAt,eventId,payload) VALUES (?,?,?)')
+            stmt.run(ev.receivedAt || Date.now(), ev.eventId || '', JSON.stringify(ev))
+            stmt.finalize()
+          } catch (e) {
+            console.error('SQLite append failed, falling back to file', e && e.message)
+            fs.appendFileSync(EVENTS_LOG, JSON.stringify(ev) + '\n')
+          }
+        } else {
+          fs.appendFileSync(EVENTS_LOG, JSON.stringify(ev) + '\n')
+        }
+      } catch (e) { console.error('Failed to append event', e) }
     }
     if (Array.isArray(payload)) {
       for (var i = 0; i < payload.length; i++) {
@@ -137,6 +242,37 @@ function handleDashboard(req, res) {
   res.end(html)
 }
 
+function handleAdminExport(req, res) {
+  // export last N events as JSON (default 1000)
+  const q = url.parse(req.url, true).query
+  if (!isAdminAuthorized(req, q)) return sendJSON(res, 401, { error: 'unauthorized' })
+  const limit = Math.min(Number(q.limit) || 1000, 10000)
+  const out = events.slice(-limit)
+  res.writeHead(200, {
+    'Content-Type': 'application/json',
+    'Content-Disposition': 'attachment; filename="events.json"',
+    'Access-Control-Allow-Origin': '*'
+  })
+  res.end(JSON.stringify({ count: out.length, events: out }, null, 2))
+}
+
+function handleAdminCleanup(req, res) {
+  var body = ''
+  req.on('data', function (chunk) { body += chunk })
+  req.on('end', function () {
+    try {
+      var obj = JSON.parse(body || '{}')
+      var q = url.parse(req.url, true).query
+      if (!isAdminAuthorized(req, q)) return sendJSON(res, 401, { error: 'unauthorized' })
+      var days = obj.days || obj.maxAgeDays || 30
+      var result = cleanupOldEvents(days)
+      return sendJSON(res, 200, { ok: result.ok, before: result.before, after: result.after })
+    } catch (e) {
+      return sendJSON(res, 400, { error: 'invalid body, expected {"days":number}' })
+    }
+  })
+}
+
 var server = http.createServer(function (req, res) {
   var p = url.parse(req.url, true)
   if (req.method === 'OPTIONS') {
@@ -151,6 +287,8 @@ var server = http.createServer(function (req, res) {
   if (p.pathname === '/ingest' && req.method === 'POST') return handleIngest(req, res)
   if (p.pathname === '/toggle-fail' && req.method === 'POST') return handleToggleFail(req, res)
   if (p.pathname === '/events' && req.method === 'GET') return handleEvents(req, res)
+  if (p.pathname === '/admin/export' && req.method === 'GET') return handleAdminExport(req, res)
+  if (p.pathname === '/admin/cleanup' && req.method === 'POST') return handleAdminCleanup(req, res)
   if (p.pathname === '/dashboard' && req.method === 'GET') return handleDashboard(req, res)
   if (p.pathname === '/' && req.method === 'GET') return sendJSON(res, 200, { status: 'ok', service: 'ghostux-backend-plain' })
 
