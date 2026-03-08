@@ -113,5 +113,9 @@ jobs:
         run: |
           npm install puppeteer --no-save
           node tools/run_snippet_test.js
+      - name: Run admin UI E2E test
+        run: |
+          npm install puppeteer --no-save
+          node tools/test_admin_ui.js
         env:
           PUPPETEER_SKIP_CHROMIUM_DOWNLOAD: 'false'

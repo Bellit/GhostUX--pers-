@@ -279,6 +279,32 @@ function handleAdminExport(req, res) {
   res.end(JSON.stringify({ count: out.length, events: out }, null, 2))
 }
 
+function handleAdminLogin(req, res) {
+  const html = `<!doctype html>
+  <html>
+    <head>
+      <meta charset="utf-8">
+      <title>Admin Login - GhostUX</title>
+      <style>body{font-family:Arial,Helvetica,sans-serif;margin:20px}</style>
+    </head>
+    <body>
+      <h1>Admin Login</h1>
+      <p>Introduce tu token admin (dev: dev-admin-token)</p>
+      <label>Token: <input id="token" style="width:360px"/></label>
+      <button id="save">Guardar y entrar</button>
+      <script>
+        (function(){
+          var t=document.getElementById('token');
+          var s=localStorage.getItem('ghostux_admin_token'); if(s) t.value=s;
+          document.getElementById('save').onclick=function(){ localStorage.setItem('ghostux_admin_token', t.value); window.location.href='/dashboard'; };
+        })();
+      </script>
+    </body>
+  </html>`;
+  res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+  res.end(html);
+}
+
 function handleAdminCleanup(req, res) {
   var body = ''
   req.on('data', function (chunk) { body += chunk })
@@ -312,6 +338,7 @@ var server = http.createServer(function (req, res) {
   if (p.pathname === '/events' && req.method === 'GET') return handleEvents(req, res)
   if (p.pathname === '/admin/export' && req.method === 'GET') return handleAdminExport(req, res)
   if (p.pathname === '/admin/cleanup' && req.method === 'POST') return handleAdminCleanup(req, res)
+  if (p.pathname === '/admin/login' && req.method === 'GET') return handleAdminLogin(req, res)
   if (p.pathname === '/dashboard' && req.method === 'GET') return handleDashboard(req, res)
   if (p.pathname === '/' && req.method === 'GET') return sendJSON(res, 200, { status: 'ok', service: 'ghostux-backend-plain' })
 
