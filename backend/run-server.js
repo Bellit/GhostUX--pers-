@@ -17,9 +17,20 @@ server.post('/ingest', function (request, reply) {
   } catch (err) {
     payload = { raw: String(request.body) }
   }
-  var event = Object.assign({ receivedAt: Date.now() }, payload)
-  events.push(event)
-  server.log.info({ event: event }, 'ingested event')
+  function genId() { return Date.now().toString(36) + '-' + Math.random().toString(36).slice(2,9) }
+  if (Array.isArray(payload)) {
+    var added = []
+    payload.forEach(function(p) {
+      var ev = Object.assign({ receivedAt: Date.now(), eventId: p && p.eventId ? p.eventId : genId() }, p)
+      events.push(ev)
+      added.push(ev)
+    })
+    server.log.info({ added: added }, 'ingested batch')
+  } else {
+    var event = Object.assign({ receivedAt: Date.now(), eventId: payload && payload.eventId ? payload.eventId : genId() }, payload)
+    events.push(event)
+    server.log.info({ event: event }, 'ingested event')
+  }
   reply.header('Access-Control-Allow-Origin', '*')
   reply.header('Access-Control-Allow-Methods', 'POST, OPTIONS')
   reply.header('Access-Control-Allow-Headers', 'Content-Type')

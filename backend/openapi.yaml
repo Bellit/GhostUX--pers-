@@ -11,20 +11,7 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              properties:
-                type:
-                  type: string
-                tag:
-                  type: string
-                x:
-                  type: number
-                  nullable: true
-                y:
-                  type: number
-                  nullable: true
-                ts:
-                  type: integer
+              $ref: '#/components/schemas/Event'
       responses:
         '204':
           description: Event accepted
@@ -44,4 +31,61 @@ paths:
                   events:
                     type: array
                     items:
-                      type: object
+                      $ref: '#/components/schemas/Event'
+components:
+  schemas:
+    Event:
+      type: object
+      description: "Event payload sent from capture snippet. Keep payload minimal and avoid PII. Fields marked 'clientOnly' are provided by client; server will enrich with receivedAt and id."
+      properties:
+        eventId:
+          type: string
+          format: uuid
+          description: 'Optional client-generated UUID. If absent the server will generate one.'
+        type:
+          type: string
+          description: 'Event type (click, scroll, error, pageview, etc.)'
+        ts:
+          type: integer
+          description: 'Client timestamp in milliseconds since epoch'
+        pageUrl:
+          type: string
+          format: uri
+          description: 'Full page URL where event occurred'
+        referrer:
+          type: string
+          description: 'Document referrer'
+        tag:
+          type: string
+          description: 'Tag name of target element (e.g., BUTTON, A)'
+        selector:
+          type: string
+          description: 'Lightweight CSS selector or data-attribute identifying the element (avoid sensitive data)'
+        x:
+          type: number
+          nullable: true
+          description: 'Client X coordinate (optional)'
+        y:
+          type: number
+          nullable: true
+          description: 'Client Y coordinate (optional)'
+        viewport:
+          type: object
+          properties:
+            width:
+              type: integer
+            height:
+              type: integer
+        userAgent:
+          type: string
+          description: 'Optional UA string; consider truncation to avoid fingerprinting'
+        sessionId:
+          type: string
+          description: 'Anonymous session identifier (should be non-PII, hashed)'
+        anonId:
+          type: string
+          description: 'Anonymous user identifier (hashed or pseudonymized)'
+        meta:
+          type: object
+          description: 'Optional free-form metadata (avoid PII)'
+      required: [ type, ts, pageUrl ]
