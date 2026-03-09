@@ -1,0 +1,19 @@
+<!DOCTYPE html><html><head>
+      <meta charset="utf-8">
+      <title>Admin Login - GhostUX</title>
+      <style>body{font-family:Arial,Helvetica,sans-serif;margin:20px}</style>
+    </head>
+    <body>
+      <h1>Admin Login</h1>
+      <p>Introduce tu token admin (dev: dev-admin-token)</p>
+      <label>Token: <input id="token" style="width:360px"></label>
+      <button id="save">Guardar y entrar</button>
+      <script>
+        (function(){
+          var t=document.getElementById('token');
+          var s=localStorage.getItem('ghostux_admin_token'); if(s) t.value=s;
+          document.getElementById('save').onclick=function(){ localStorage.setItem('ghostux_admin_token', t.value); window.location.href='/dashboard'; };
+        })();
+      </script>
+    
+  </body></html>
